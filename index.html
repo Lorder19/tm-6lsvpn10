@@ -25,6 +25,19 @@ header h1 { font-size: 16px; font-weight: 600; color: #f1f5f9; }
   border-radius: 20px; color: #475569;
 }
 .badge b { color: #6366f1; font-weight: 600; }
+.pool-tracker {
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+  font-size: 11px; padding: 4px 10px; background: #151b27;
+  border: 1px solid #1e2d45; border-radius: 20px; color: #64748b;
+}
+.pool-tracker[hidden] { display: none; }
+.badge + .pool-tracker { margin-left: 4px; }
+.pt-count { color: #cbd5e1; font-weight: 600; font-variant-numeric: tabular-nums; min-width: 34px; text-align: right; }
+.pt-bar { width: 44px; height: 4px; background: #1e2d45; border-radius: 4px; overflow: hidden; }
+.pt-fill { display: block; height: 100%; width: 0; background: #22c55e; transition: width .4s ease; }
+.pt-spark { display: block; }
+.pt-line { fill: none; stroke: #6366f1; stroke-width: 1.5; stroke-linejoin: round; }
+.pt-area { fill: #6366f1; opacity: .15; }
 
 .layout { display: flex; flex: 1; min-height: 0; }
 
@@ -212,6 +225,8 @@ header h1 { font-size: 16px; font-weight: 600; color: #f1f5f9; }
   .r-head { padding: 12px 16px 10px; }
   header { padding: 12px 16px; }
   .badge { display: none; }
+  .pool-tracker, .badge + .pool-tracker { margin-left: auto; }
+  .pt-bar, .pt-label { display: none; }
   .code-val { font-size: 20px; letter-spacing: 3px; }
 }
 </style>
@@ -225,6 +240,12 @@ header h1 { font-size: 16px; font-weight: 600; color: #f1f5f9; }
   </svg>
   <h1>Temp Mail</h1>
   <div class="badge">личное зеркало — <b>мгновенная почта</b></div>
+  <div class="pool-tracker" id="pool-tracker" hidden title="Запасные ящики: сколько готово к мгновенной смене. График — заполненность за последние 10–60 минут.">
+    <span class="pt-label">Запас</span>
+    <span class="pt-count" id="pt-count">0/20</span>
+    <span class="pt-bar"><span class="pt-fill" id="pt-fill"></span></span>
+    <svg class="pt-spark" width="72" height="20" viewBox="0 0 72 20" aria-hidden="true"><path id="pt-area" class="pt-area" d=""/><path id="pt-line" class="pt-line" d=""/></svg>
+  </div>
 </header>
 
 <div class="layout">
@@ -314,7 +335,8 @@ header h1 { font-size: 16px; font-weight: 600; color: #f1f5f9; }
 const API = 'https://flat-rice-5b1c.armdi19.workers.dev';
 const MERCURE = 'https://mercure.mail.tm/.well-known/mercure';
 const SESSION_KEY = 'tm_sess_private';
-const POOL_SIZE = 2;
+const POOL_SIZE = 20;
+const POOL_TRACKER = true;
 let token = '', email = '', password = '';
 let pollTimer = null, known = new Set();
 let pollErrors = 0;
@@ -493,7 +515,6 @@ async function mtFetch(path, opts={}, retries=2) {
    minute. Spares are created in the background so «Новый аккаунт» is
    instant; the wait happens while nobody is looking. */
 const POOL_KEY = SESSION_KEY + '_pool';
-const POOL_MAX_AGE = 7 * 24 * 3600 * 1000;
 const FOREGROUND_TIMEOUT = 120000;
 let domainCache = null;
 let refilling = false;
@@ -512,10 +533,45 @@ function refillSleep(ms) {
 function loadPool() {
   try {
     const p = JSON.parse(localStorage.getItem(POOL_KEY));
-    return Array.isArray(p) ? p.filter(a => a && a.address && a.password && Date.now() - a.createdAt < POOL_MAX_AGE) : [];
+    return Array.isArray(p) ? p.filter(a => a && a.address && a.password) : [];
   } catch(_) { return []; }
 }
-function savePool(p) { try { localStorage.setItem(POOL_KEY, JSON.stringify(p)); } catch(_) {} }
+function savePool(p) { try { localStorage.setItem(POOL_KEY, JSON.stringify(p)); } catch(_) {} recordPool(); }
+
+/* ── pool tracker (corner widget) ─────────── */
+const POOL_HIST_KEY = POOL_KEY + '_hist';
+const HIST_WINDOW = 60 * 60 * 1000;
+function loadHist() { try { const h = JSON.parse(localStorage.getItem(POOL_HIST_KEY)); return Array.isArray(h) ? h : []; } catch(_) { return []; } }
+function recordPool() {
+  if (!POOL_TRACKER) return;
+  const n = loadPool().length, now = Date.now();
+  const h = loadHist().filter(x => now - x.t < HIST_WINDOW);
+  const last = h[h.length - 1];
+  if (!last || last.n !== n || now - last.t > 60000) h.push({ t: now, n });
+  try { localStorage.setItem(POOL_HIST_KEY, JSON.stringify(h)); } catch(_) {}
+  renderTracker(n, h);
+}
+function renderTracker(n, h) {
+  const box = document.getElementById('pool-tracker');
+  if (!box) return;
+  box.hidden = false;
+  document.getElementById('pt-count').textContent = n + '/' + POOL_SIZE;
+  document.getElementById('pt-fill').style.width = Math.round(n / POOL_SIZE * 100) + '%';
+  const W = 72, H = 20, now = Date.now();
+  const span = Math.min(HIST_WINDOW, Math.max(10 * 60 * 1000, h.length ? now - h[0].t : 0));
+  const t0 = now - span;
+  const pts = h.filter(x => x.t >= t0);
+  const before = h.filter(x => x.t < t0).pop();
+  const seq = (before ? [{ t: t0, n: before.n }] : []).concat(pts, [{ t: now, n }]);
+  const X = t => (Math.max(0, t - t0) / span * W).toFixed(1);
+  const Y = v => (H - 1 - v / POOL_SIZE * (H - 2)).toFixed(1);
+  let d = '';
+  seq.forEach((p, i) => { d += (i ? ' L' + X(p.t) + ' ' + Y(seq[i-1].n) + ' L' : 'M') + X(p.t) + ' ' + Y(p.n); });
+  document.getElementById('pt-line').setAttribute('d', d);
+  document.getElementById('pt-area').setAttribute('d', d + ' L' + X(now) + ' ' + H + ' L' + X(seq[0].t) + ' ' + H + ' Z');
+}
+window.addEventListener('storage', e => { if (e.key === POOL_KEY || e.key === POOL_HIST_KEY) recordPool(); });
+setInterval(recordPool, 60000);
 function takeFromPool() { const p = loadPool(); const a = p.shift() || null; savePool(p); return a; }
 
 async function apiCall(path, body) {
@@ -876,6 +932,7 @@ document.addEventListener('visibilitychange', () => {
 (async()=>{
   const restored = await restoreSession();
   if(!restored) await createNew();
+  recordPool();
   refill();
 })();
 </script>
