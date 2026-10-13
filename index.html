@@ -1,1 +1,778 @@
-<!doctype html><title>t</title>
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Temp Mail · личное</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #0f1117; color: #e2e8f0;
+  min-height: 100vh; display: flex; flex-direction: column;
+}
+
+header {
+  padding: 15px 26px; border-bottom: 1px solid #1e2433;
+  display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+}
+header svg { color: #6366f1; }
+header h1 { font-size: 16px; font-weight: 600; color: #f1f5f9; }
+.badge {
+  margin-left: auto; font-size: 11px; padding: 3px 10px;
+  background: #151b27; border: 1px solid #1e2d45;
+  border-radius: 20px; color: #475569;
+}
+.badge b { color: #6366f1; font-weight: 600; }
+
+.layout { display: flex; flex: 1; min-height: 0; }
+
+/* ─── LEFT ─── */
+.left {
+  width: 320px; min-width: 280px; border-right: 1px solid #1e2433;
+  padding: 20px 18px; display: flex; flex-direction: column;
+  gap: 13px; background: #0d1018; flex-shrink: 0; overflow-y: auto;
+}
+
+.lbl {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .09em; color: #475569; margin-bottom: 4px;
+}
+
+.val {
+  background: #151b27; border: 1px solid #1e2d45; border-radius: 7px;
+  padding: 10px 12px; font-size: 13px; color: #64748b;
+  word-break: break-all; font-family: 'SF Mono', 'Fira Code', monospace;
+  min-height: 40px; display: flex; align-items: center;
+  cursor: default;
+  transition: transform .12s ease, color .12s ease, border-color .12s ease, background .12s ease;
+  user-select: none;
+}
+.val.ready { color: #cbd5e1; border-color: #263a57; cursor: pointer; }
+.val.dim { font-family: inherit; font-style: italic; font-size: 12px; }
+.val.ready:hover { background: #1a2235; }
+.val.flash {
+  color: #22c55e !important; border-color: #16a34a !important;
+  background: #0d1f12 !important; transform: scale(0.96);
+}
+
+.copy-all-btn {
+  width: 100%; padding: 11px; background: #6366f1; color: #fff;
+  border: none; border-radius: 8px; font-size: 13px; font-weight: 600;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  gap: 7px; transition: background .15s, transform .1s;
+}
+.copy-all-btn:hover:not(:disabled) { background: #4f52e0; }
+.copy-all-btn:active:not(:disabled) { transform: scale(.97); }
+.copy-all-btn.flash-btn { background: #16a34a !important; transform: scale(0.97); }
+.copy-all-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+.hint {
+  font-size: 11px; color: #334155; line-height: 1.5;
+  padding: 8px 10px; background: #0f1520;
+  border-radius: 6px; border: 1px solid #1a2236;
+}
+
+.new-btn {
+  width: 100%; padding: 10px; background: transparent; color: #64748b;
+  border: 1px solid #1e2d45; border-radius: 8px; font-size: 12px;
+  font-weight: 500; cursor: pointer; display: flex; align-items: center;
+  justify-content: center; gap: 6px; transition: all .15s;
+}
+.new-btn:hover:not(:disabled) { border-color: #334155; color: #94a3b8; background: #151b27; }
+.new-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+.div {
+  display: flex; align-items: center; gap: 8px;
+  color: #334155; font-size: 10px; text-transform: uppercase; letter-spacing: .07em;
+}
+.div::before, .div::after { content: ''; flex: 1; height: 1px; background: #1e2433; }
+
+.login-box {
+  background: #0a0f1a; border: 1px solid #1e2d45;
+  border-radius: 9px; padding: 14px;
+  display: flex; flex-direction: column; gap: 9px;
+}
+
+.inp {
+  width: 100%; background: #151b27; border: 1px solid #1e2d45;
+  border-radius: 6px; padding: 9px 11px; font-size: 12px;
+  color: #94a3b8; outline: none; font-family: 'SF Mono', monospace;
+  transition: border-color .15s;
+}
+.inp::placeholder { color: #334155; font-family: inherit; }
+.inp:focus { border-color: #6366f1; }
+
+.login-btn {
+  width: 100%; padding: 9px; background: #1e2d45; border: 1px solid #263a57;
+  border-radius: 6px; color: #94a3b8; font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: all .15s;
+}
+.login-btn:hover { background: #263a57; color: #cbd5e1; }
+
+.login-note { font-size: 10px; color: #334155; line-height: 1.5; }
+
+.err-box {
+  font-size: 11px; color: #fca5a5; background: #1a0a0a;
+  border: 1px solid #7f1d1d; border-radius: 6px;
+  padding: 8px 10px; display: none; line-height: 1.5;
+}
+.err-box.show { display: block; }
+
+.status {
+  font-size: 11px; color: #475569;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding-top: 2px;
+}
+.dot { width: 6px; height: 6px; border-radius: 50%; background: #1e2d45; flex-shrink: 0; }
+.dot.on  { background: #22c55e; animation: pulse 2s infinite; }
+.dot.err { background: #ef4444; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+/* ─── RIGHT ─── */
+.right { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.r-head {
+  padding: 16px 22px 13px; border-bottom: 1px solid #1e2433;
+  display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+}
+.r-head h2 { font-size: 14px; font-weight: 600; color: #cbd5e1; }
+.cnt {
+  font-size: 11px; color: #475569; background: #151b27;
+  border: 1px solid #1e2d45; border-radius: 20px; padding: 2px 9px;
+}
+
+.msgs { flex: 1; overflow-y: auto; padding: 16px 22px; display: flex; flex-direction: column; gap: 11px; }
+
+.empty {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 10px; color: #1e2d45; text-align: center; padding: 40px;
+}
+.empty p     { font-size: 13px; color: #334155; }
+.empty small { font-size: 11px; }
+
+.card {
+  background: #111827; border: 1px solid #1e2d45;
+  border-radius: 10px; padding: 14px 17px;
+  animation: slide .2s ease;
+}
+.card.new { border-color: #6366f1; box-shadow: 0 0 0 1px #6366f118; }
+@keyframes slide { from{opacity:0;transform:translateY(-5px)} to{opacity:1;transform:translateY(0)} }
+
+.c-from  { font-size: 11px; color: #475569; margin-bottom: 3px; }
+.c-subj  { font-size: 13px; color: #94a3b8; margin-bottom: 9px; font-weight: 500; }
+
+.code-wrap {
+  background: #080d17; border: 1px solid #1e3a5f;
+  border-radius: 7px; padding: 11px 15px; margin-bottom: 9px;
+  display: flex; align-items: center; gap: 10px;
+  cursor: pointer; user-select: none;
+  transition: transform .12s ease, border-color .12s ease, background .12s ease;
+}
+.code-wrap:hover { background: #0c1420; }
+.code-wrap.flash {
+  border-color: #16a34a !important;
+  background: #0a1f10 !important;
+  transform: scale(0.97);
+}
+.code-val {
+  font-family: 'SF Mono', monospace; font-size: 26px;
+  font-weight: 700; color: #6366f1; letter-spacing: 5px;
+  flex: 1;
+  transition: color .12s ease;
+}
+.code-wrap.flash .code-val { color: #22c55e; }
+.code-hint { font-size: 10px; color: #334155; white-space: nowrap; }
+.code-wrap.flash .code-hint { color: #16a34a; }
+
+.c-text {
+  font-size: 12px; color: #475569; line-height: 1.6;
+  max-height: 70px; overflow: hidden; white-space: pre-wrap;
+}
+.c-text.open { max-height: none; }
+.c-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 7px; }
+.c-time { font-size: 11px; color: #334155; }
+.exp-btn { font-size: 11px; color: #475569; background: none; border: none; cursor: pointer; }
+.exp-btn:hover { color: #6366f1; }
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-thumb { background: #1e2d45; border-radius: 10px; }
+
+/* ─── MOBILE ─── */
+@media (max-width: 700px) {
+  .layout { flex-direction: column; }
+  .left {
+    width: 100%; min-width: 0; border-right: none;
+    border-bottom: 1px solid #1e2433;
+    max-height: 55vh; overflow-y: auto;
+  }
+  .right { min-height: 45vh; }
+  .msgs { padding: 12px 16px; }
+  .r-head { padding: 12px 16px 10px; }
+  header { padding: 12px 16px; }
+  .badge { display: none; }
+  .code-val { font-size: 20px; letter-spacing: 3px; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <rect x="2" y="4" width="20" height="16" rx="2"/>
+    <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+  </svg>
+  <h1>Temp Mail</h1>
+  <div class="badge">личное зеркало — <b>мгновенная почта</b></div>
+</header>
+
+<div class="layout">
+
+  <!-- LEFT -->
+  <div class="left">
+
+    <div>
+      <div class="lbl">Email <span style="color:#334155;font-weight:400;text-transform:none;font-size:10px">— нажми чтобы скопировать</span></div>
+      <div class="val dim" id="el" onclick="clickCopy(this, () => email)"></div>
+    </div>
+    <div>
+      <div class="lbl">Пароль <span style="color:#334155;font-weight:400;text-transform:none;font-size:10px">— нажми чтобы скопировать</span></div>
+      <div class="val dim" id="pl" onclick="clickCopy(this, () => password)"></div>
+    </div>
+
+    <button class="copy-all-btn" id="copy-all" onclick="copyAll(this)" disabled>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+        <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
+        <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+      </svg>
+      Скопировать логин + пароль (в таблицу)
+    </button>
+
+    <div class="hint">Кнопка выше копирует оба поля через Tab — при вставке в таблицу расходятся по ячейкам.</div>
+
+    <button class="new-btn" id="new-btn" onclick="createNew()" disabled>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+        <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+        <path d="M21 3v5h-5"/>
+        <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+        <path d="M8 16H3v5"/>
+      </svg>
+      Новый аккаунт
+    </button>
+
+    <div class="div">войти в существующий</div>
+
+    <div class="login-box">
+      <div>
+        <div class="lbl">Email</div>
+        <input class="inp" id="li-email" type="email" placeholder="user@domain.com"
+          onkeydown="if(event.key==='Enter') document.getElementById('li-pass').focus()" />
+      </div>
+      <div>
+        <div class="lbl">Пароль</div>
+        <input class="inp" id="li-pass" type="password" placeholder="••••••••"
+          onkeydown="if(event.key==='Enter') loginExisting()" />
+      </div>
+      <button class="login-btn" onclick="loginExisting()">Войти и получить письма</button>
+    </div>
+
+    <div class="login-note">
+      Через 2 недели — вводишь тот же email и пароль, получаешь новые коды.<br>
+      Аккаунты mail.tm не удаляются автоматически.
+    </div>
+
+    <div class="err-box" id="err"></div>
+
+    <div class="status">
+      <span class="dot" id="dot"></span>
+      <span id="st">Инициализация…</span>
+    </div>
+  </div>
+
+  <!-- RIGHT -->
+  <div class="right">
+    <div class="r-head">
+      <h2>Входящие</h2>
+      <span class="cnt" id="cnt">0</span>
+    </div>
+    <div class="msgs" id="msgs">
+      <div class="empty" id="empty">
+        <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+          <rect x="2" y="4" width="20" height="16" rx="2"/>
+          <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+        </svg>
+        <p>Писем пока нет</p>
+        <small>Используйте адрес для регистрации —<br>код придёт сюда автоматически</small>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const API = 'https://flat-rice-5b1c.armdi19.workers.dev';
+const MERCURE = 'https://mercure.mail.tm/.well-known/mercure';
+const SESSION_KEY = 'tm_sess_private';
+let token = '', email = '', password = '';
+let pollTimer = null, known = new Set();
+let pollErrors = 0;
+let gen = 0;
+const partial = new Map();
+const live = { ctrl: null, gen: 0, connected: false, retry: 0 };
+
+/* ── utils ─────────────────────────────────── */
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function htmlToText(h) {
+  try {
+    const doc = new DOMParser().parseFromString(h, 'text/html');
+    doc.querySelectorAll('style,script,head,title,noscript').forEach(n => n.remove());
+    doc.querySelectorAll('br').forEach(n => n.replaceWith('\n'));
+    doc.querySelectorAll('p,div,tr,li,h1,h2,h3,h4,h5,h6,table,blockquote').forEach(n => n.append('\n'));
+    return (doc.body ? doc.body.textContent : '')
+      .replace(/[ \t ]+/g, ' ')
+      .replace(/ *\n */g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  } catch(_) { return h.replace(/<style[\s\S]*?<\/style>/gi,'').replace(/<[^>]*>/g,''); }
+}
+function findCode(text, subject) {
+  const near = /(?:code|код|кода|otp|pin|verification|подтвержд|пароль|password)\D{0,40}?(\d{4,8})\b/i;
+  const generic = [/\b(\d{6})\b/,/\b(\d{8})\b/,/\b(\d{5})\b/,/\b(\d{4})\b/];
+  const m1 = (text||'').match(near); if (m1) return m1[1];
+  const m2 = (subject||'').match(near); if (m2) return m2[1];
+  for (const src of [subject, text]) {
+    if (!src) continue;
+    for (const re of generic) { const m = src.match(re); if (m) return m[1]; }
+  }
+  return null;
+}
+function ago(iso) {
+  const s=Math.floor((Date.now()-new Date(iso))/1000);
+  if(s<60) return 'только что';
+  if(s<3600) return Math.floor(s/60)+' мин. назад';
+  if(s<86400) return Math.floor(s/3600)+' ч. назад';
+  return Math.floor(s/86400)+' дн. назад';
+}
+function genPass() {
+  const U='BCDFGHJKLMNPQRSTVWXYZ', l='bcdfghjklmnpqrstvwxyz', d='23456789', s='!@#$%';
+  const pick = c => c[Math.random()*c.length|0];
+  return pick(U)+pick(l)+pick(l)+pick(d)+pick(d)+pick(s)
+        +pick(l)+pick(d)+pick(l)+pick(U)+pick(d)+pick(s);
+}
+function rand(n){return Math.random().toString(36).slice(2,2+n).padEnd(n,'x');}
+function jwtPayload(t) {
+  try { let s=t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'); s+='='.repeat((4-s.length%4)%4); return JSON.parse(atob(s)); }
+  catch(_) { return null; }
+}
+
+function setDot(s){document.getElementById('dot').className='dot'+(s==='on'?' on':s==='err'?' err':'');}
+function setSt(t,s=''){document.getElementById('st').textContent=t;setDot(s);}
+function showErr(t){const b=document.getElementById('err');b.textContent=t;b.className='err-box show';}
+function clearErr(){document.getElementById('err').className='err-box';}
+function okStatus(){
+  setSt((live.connected ? 'Мгновенно · ' : 'Опрос · ') + 'обновлено ' + new Date().toLocaleTimeString('ru'), 'on');
+}
+
+function saveSession(){
+  try{localStorage.setItem(SESSION_KEY,JSON.stringify({email,password}));}catch(_){}
+}
+function loadSession(){
+  try{const d=JSON.parse(localStorage.getItem(SESSION_KEY));return d&&d.email&&d.password?d:null;}catch(_){return null;}
+}
+function clearSession(){
+  try{localStorage.removeItem(SESSION_KEY);}catch(_){}
+}
+
+/* ── copy helpers ──────────────────────────── */
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return; } catch(_) {}
+  const t=document.createElement('textarea');
+  t.value=text; t.style.position='fixed'; t.style.opacity='0';
+  document.body.appendChild(t); t.focus(); t.select();
+  document.execCommand('copy'); t.remove();
+}
+
+function clickCopy(el, getter) {
+  const val = getter();
+  if (!val || !el.classList.contains('ready')) return;
+  copyText(val);
+  el.classList.add('flash');
+  setTimeout(() => el.classList.remove('flash'), 500);
+}
+
+async function copyAll(btn) {
+  if (!email) return;
+  await copyText(email + '\t' + password);
+  btn.classList.add('flash-btn');
+  setTimeout(() => btn.classList.remove('flash-btn'), 500);
+}
+
+function clickCode(el, code) {
+  copyText(code);
+  el.classList.add('flash');
+  setTimeout(() => el.classList.remove('flash'), 500);
+}
+
+/* ── account switching ─────────────────────── */
+function stopAll() {
+  gen++;
+  stopPoll(); liveStop();
+  known.clear(); partial.clear();
+}
+
+function setAccount(e, p, t) {
+  email=e; password=p; token=t;
+  const el=document.getElementById('el');
+  el.textContent=e; el.className='val ready';
+  el.onclick = () => clickCopy(el, ()=>email);
+  const pl=document.getElementById('pl');
+  pl.textContent=p; pl.className='val ready';
+  pl.onclick = () => clickCopy(pl, ()=>password);
+  document.getElementById('copy-all').disabled=false;
+  document.getElementById('new-btn').disabled=false;
+  saveSession();
+}
+
+function goLive(statusText) {
+  pollErrors=0;
+  clearErr(); setSt(statusText,'on');
+  startPoll();
+  liveStart();
+}
+
+/* ── fetch with retry ───────────────────────── */
+async function mtFetch(path, opts={}, retries=2) {
+  let lastErr = null;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const r = await fetch(API+path, {
+        headers: {
+          'Content-Type':'application/json',
+          ...(token?{'Authorization':'Bearer '+token}:{})
+        },
+        ...opts
+      });
+      if (r.status === 429) {
+        lastErr = new Error('HTTP 429: лимит запросов mail.tm');
+        if (attempt < retries) {
+          const wait = Math.min(2000 * (attempt+1), 8000);
+          setSt('Лимит запросов, ждём '+Math.ceil(wait/1000)+'с…');
+          await new Promise(ok=>setTimeout(ok,wait));
+        }
+        continue;
+      }
+      if (r.status >= 500 && attempt < retries) {
+        lastErr = new Error('HTTP '+r.status);
+        await new Promise(ok=>setTimeout(ok, 1500*(attempt+1)));
+        continue;
+      }
+      if (!r.ok) {
+        const txt=await r.text().catch(()=>'');
+        throw new Error(`HTTP ${r.status}: ${txt.slice(0,100)}`);
+      }
+      return r.json();
+    } catch(e) {
+      if (e.message.startsWith('HTTP ')) throw e;
+      lastErr = e;
+      if (attempt < retries) {
+        await new Promise(ok=>setTimeout(ok, 1500*(attempt+1)));
+        continue;
+      }
+    }
+  }
+  throw lastErr || new Error('Запрос не удался');
+}
+
+/* ── create new account ────────────────────── */
+async function createNew(autoRetry=0) {
+  stopAll(); clearErr();
+  const myGen = gen;
+  document.getElementById('new-btn').disabled=true;
+  document.getElementById('copy-all').disabled=true;
+  const el=document.getElementById('el'); el.textContent='Создаём…'; el.className='val dim'; el.onclick=null;
+  const pl=document.getElementById('pl'); pl.textContent='—'; pl.className='val dim'; pl.onclick=null;
+  resetInbox(); setSt('Получаем домен…');
+  try {
+    token='';
+    const dd = await mtFetch('/domains?page=1');
+    const members = dd['hydra:member']||[];
+    if(!members.length) throw new Error('Нет доступных доменов');
+    const domain = members[0].domain;
+    const pass=genPass(), addr=`${rand(10)}@${domain}`;
+    setSt('Создаём аккаунт…');
+    await mtFetch('/accounts',{method:'POST',body:JSON.stringify({address:addr,password:pass})}, 4);
+    setSt('Получаем токен…');
+    const td=await mtFetch('/token',{method:'POST',body:JSON.stringify({address:addr,password:pass})});
+    if (myGen !== gen) return;
+    setAccount(addr,pass,td.token);
+    goLive('Ожидаем письма…');
+  } catch(e) {
+    if (myGen !== gen) return;
+    if (autoRetry < 3) {
+      const wait = 2000*(autoRetry+1);
+      setSt('Ошибка, повтор через '+Math.ceil(wait/1000)+'с…','err');
+      setTimeout(()=>{ if (myGen === gen) createNew(autoRetry+1); }, wait);
+      return;
+    }
+    showErr('Не удалось создать аккаунт: '+e.message+'. Нажмите «Новый аккаунт» для повтора.');
+    setSt('Ошибка','err');
+    document.getElementById('new-btn').disabled=false;
+    document.getElementById('el').textContent='—';
+  }
+}
+
+/* ── login existing ────────────────────────── */
+async function loginExisting() {
+  const e=document.getElementById('li-email').value.trim();
+  const p=document.getElementById('li-pass').value.trim();
+  if(!e||!p){showErr('Введите email и пароль');return;}
+  stopAll(); clearErr(); resetInbox(); setSt('Входим…');
+  const myGen = gen;
+  try {
+    token='';
+    const td=await mtFetch('/token',{method:'POST',body:JSON.stringify({address:e,password:p})});
+    if (myGen !== gen) return;
+    setAccount(e,p,td.token);
+    document.getElementById('li-email').value='';
+    document.getElementById('li-pass').value='';
+    goLive('Ожидаем письма…');
+  } catch(e2) {
+    if (myGen !== gen) return;
+    showErr('Не удалось войти: '+e2.message);
+    setSt('Ошибка входа','err');
+  }
+}
+
+/* ── restore saved session ────────────────── */
+async function restoreSession() {
+  const sess = loadSession();
+  if (!sess) return false;
+  const myGen = gen;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    setSt(attempt ? 'Восстанавливаем сессию, попытка '+(attempt+1)+'…' : 'Восстанавливаем сессию…');
+    try {
+      const td=await mtFetch('/token',{method:'POST',body:JSON.stringify({address:sess.email,password:sess.password})});
+      if (myGen !== gen) return true;
+      setAccount(sess.email, sess.password, td.token);
+      goLive('Сессия восстановлена');
+      return true;
+    } catch(e) {
+      if (myGen !== gen) return true;
+      if (String(e.message).includes('401')) { clearSession(); return false; }
+      await new Promise(ok=>setTimeout(ok, 2000 * 2 ** attempt));
+    }
+  }
+  showErr('Не удалось восстановить '+sess.email+' (сеть или лимит mail.tm). Войдите вручную или создайте новый.');
+  setSt('Ошибка','err');
+  document.getElementById('new-btn').disabled=false;
+  return true;
+}
+
+async function refreshToken() {
+  const myGen = gen;
+  const td = await mtFetch('/token',{method:'POST',body:JSON.stringify({address:email,password})});
+  if (myGen !== gen) return false;
+  token = td.token;
+  return true;
+}
+
+/* ── live push (Mercure, as mail.tm itself does) ── */
+function liveStop() {
+  live.gen++;
+  if (live.ctrl) { live.ctrl.abort(); live.ctrl = null; }
+  live.connected = false;
+}
+
+async function liveStart() {
+  liveStop();
+  const myLive = live.gen, myGen = gen;
+  const id = jwtPayload(token)?.id;
+  if (!id) return;
+  const ctrl = new AbortController(); live.ctrl = ctrl;
+  let gotStream = false;
+  try {
+    const r = await fetch(MERCURE + '?topic=' + encodeURIComponent('/accounts/' + id), {
+      headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'text/event-stream' },
+      cache: 'no-store', signal: ctrl.signal,
+    });
+    if (r.status === 401 && email && password) { await refreshToken(); throw new Error('mercure 401'); }
+    if (!r.ok || !(r.headers.get('content-type')||'').startsWith('text/event-stream')) throw new Error('mercure ' + r.status);
+    gotStream = true;
+    live.connected = true; live.retry = 0;
+    schedulePoll();
+    doPoll();
+    const reader = r.body.pipeThrough(new TextDecoderStream()).getReader();
+    let buf = '';
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += value;
+      let idx;
+      while ((idx = buf.search(/\r?\n\r?\n/)) >= 0) {
+        const block = buf.slice(0, idx);
+        buf = buf.slice(idx).replace(/^\r?\n\r?\n/, '');
+        const data = block.split(/\r?\n/).filter(l => l.startsWith('data:')).map(l => l.slice(5).replace(/^ /,'')).join('\n');
+        if (data && myGen === gen) onLiveEvent(data);
+      }
+    }
+  } catch(_) {
+    if (ctrl.signal.aborted) return;
+  }
+  if (myLive !== live.gen || myGen !== gen) return;
+  live.connected = false;
+  schedulePoll();
+  const wait = gotStream ? 1000 : Math.min(2000 * 2 ** live.retry++, 30000);
+  setTimeout(() => { if (myLive === live.gen && myGen === gen) liveStart(); }, wait);
+}
+
+function onLiveEvent(data) {
+  let m;
+  try { m = JSON.parse(data); } catch(_) { return; }
+  if (!m || m['@type'] !== 'Message') return;
+  if (m.isDeleted) { document.getElementById('c'+m.id)?.remove(); known.delete(m.id); updateCount(); return; }
+  if (!known.has(m.id)) { known.add(m.id); updateCount(); fetchMsg(m, true); }
+}
+
+/* ── poll (fallback + catch-up) ───────────── */
+function pollDelay() {
+  if (pollErrors > 0) return Math.min(5000 * Math.pow(2, pollErrors-1), 60000);
+  return live.connected ? 30000 : 5000;
+}
+function startPoll(){
+  pollErrors=0;
+  doPoll();
+  schedulePoll();
+}
+function schedulePoll(){
+  if(pollTimer) clearTimeout(pollTimer);
+  if(!token) return;
+  pollTimer=setTimeout(()=>{doPoll();schedulePoll();}, pollDelay());
+}
+function stopPoll(){if(pollTimer){clearTimeout(pollTimer);pollTimer=null;}}
+
+function updateCount() {
+  document.getElementById('cnt').textContent = known.size;
+}
+
+async function doPoll() {
+  if(!token) return;
+  const myGen = gen;
+  try {
+    const d=await mtFetch('/messages?page=1');
+    if (myGen !== gen) return;
+    const msgs=d['hydra:member']||[];
+    const firstLoad = known.size === 0;
+    for(const m of msgs){
+      if(!known.has(m.id)){ known.add(m.id); fetchMsg(m, !firstLoad); }
+      else if (partial.has(m.id)) { fetchMsg(m, false); }
+    }
+    updateCount();
+    pollErrors=0;
+    okStatus();
+    clearErr();
+  } catch(e) {
+    if (myGen !== gen) return;
+    pollErrors++;
+    if(String(e.message).includes('401')&&email&&password){
+      try{
+        token='';
+        if (await refreshToken()) { pollErrors=0; setSt('Сессия обновлена','on'); saveSession(); liveStart(); }
+      } catch(_){
+        setSt('Сессия истекла — войдите снова','err');
+        showErr('Токен истёк. Введите email+пароль ещё раз.');
+        stopPoll(); liveStop();
+      }
+    } else {
+      setSt('Ошибка, повтор через '+Math.ceil(pollDelay()/1000)+'с…','err');
+    }
+  }
+}
+
+async function fetchMsg(m, isNew) {
+  const myGen = gen;
+  let text = m.intro || '', ok = false;
+  try {
+    const full = await mtFetch('/messages/'+m.id);
+    const fromHtml = Array.isArray(full.html) && full.html.length ? htmlToText(full.html.join('\n')) : '';
+    text = (full.text && full.text.trim()) ? full.text.trim() : (fromHtml || m.intro || '');
+    ok = true;
+  } catch(_) {}
+  if (myGen !== gen) return;
+  if (ok) partial.delete(m.id);
+  else partial.set(m.id, (partial.get(m.id) || 0) + 1);
+  if (!ok && partial.get(m.id) > 5) partial.delete(m.id);
+  renderCard({id:m.id, from:m.from?.address||'', subject:m.subject||'', text, date:m.createdAt, partial: !ok && partial.has(m.id)}, isNew);
+}
+
+/* ── render ────────────────────────────────── */
+function renderCard(m, isNew) {
+  const existing = document.getElementById('c'+m.id);
+  const code = findCode(m.text, m.subject);
+  const short = (m.text||'').trim().slice(0,400);
+  const more = (m.text||'').length > 400;
+
+  const el = existing || document.createElement('div');
+  el.className = 'card' + ((isNew || existing?.classList.contains('new')) ? ' new' : '');
+  el.id = 'c'+m.id;
+  el.dataset.date = m.date || '';
+
+  el.innerHTML=`
+    <div class="c-from">От: ${esc(m.from)}</div>
+    <div class="c-subj">${esc(m.subject||'(без темы)')}</div>
+    ${code?`
+    <div class="code-wrap" onclick="clickCode(this,'${esc(code)}')">
+      <span class="code-val">${esc(code)}</span>
+      <span class="code-hint">нажми чтобы скопировать</span>
+    </div>`:''}
+    <div class="c-text" id="t${esc(m.id)}">${esc(short)||'<i style="color:#334155">нет текста</i>'}</div>
+    <div class="c-foot">
+      <span class="c-time">${m.partial ? 'догружаем текст…' : ago(m.date)}</span>
+      ${more?`<button class="exp-btn" onclick="expand('${esc(m.id)}',\`${encodeURIComponent(m.text)}\`)">Показать всё</button>`:''}
+    </div>`;
+
+  if (existing) return;
+  document.getElementById('empty')?.remove();
+  const box = document.getElementById('msgs');
+  const t = new Date(m.date).getTime() || 0;
+  const after = [...box.querySelectorAll('.card')].find(c => (new Date(c.dataset.date).getTime() || 0) < t);
+  box.insertBefore(el, after || null);
+}
+
+function expand(id,enc){
+  const el=document.getElementById('t'+id);
+  const btn=el.nextElementSibling?.querySelector('.exp-btn');
+  el.classList.toggle('open');
+  el.textContent=el.classList.contains('open')?decodeURIComponent(enc):decodeURIComponent(enc).slice(0,400);
+  if(btn) btn.textContent=el.classList.contains('open')?'Скрыть':'Показать всё';
+}
+
+function resetInbox(){
+  document.getElementById('cnt').textContent='0';
+  document.getElementById('msgs').innerHTML=`
+    <div class="empty" id="empty">
+      <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+        <rect x="2" y="4" width="20" height="16" rx="2"/>
+        <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+      </svg>
+      <p>Писем пока нет</p>
+      <small>Используйте адрес для регистрации —<br>код придёт сюда автоматически</small>
+    </div>`;
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible' || !token) return;
+  doPoll(); schedulePoll();
+  if (!live.connected) liveStart();
+});
+
+/* ── init ──────────────────────────────────── */
+(async()=>{
+  const restored = await restoreSession();
+  if(!restored) createNew();
+})();
+</script>
+</body>
+</html>
