@@ -314,6 +314,7 @@ header h1 { font-size: 16px; font-weight: 600; color: #f1f5f9; }
 const API = 'https://flat-rice-5b1c.armdi19.workers.dev';
 const MERCURE = 'https://mercure.mail.tm/.well-known/mercure';
 const SESSION_KEY = 'tm_sess_private';
+const POOL_SIZE = 2;
 let token = '', email = '', password = '';
 let pollTimer = null, known = new Set();
 let pollErrors = 0;
@@ -486,41 +487,144 @@ async function mtFetch(path, opts={}, retries=2) {
   throw lastErr || new Error('Запрос не удался');
 }
 
-/* ── create new account ────────────────────── */
-async function createNew(autoRetry=0) {
-  stopAll(); clearErr();
-  const myGen = gen;
-  document.getElementById('new-btn').disabled=true;
-  document.getElementById('copy-all').disabled=true;
-  const el=document.getElementById('el'); el.textContent='Создаём…'; el.className='val dim'; el.onclick=null;
-  const pl=document.getElementById('pl'); pl.textContent='—'; pl.className='val dim'; pl.onclick=null;
-  resetInbox(); setSt('Получаем домен…');
+/* ── spare-mailbox pool ─────────────────────
+   mail.tm allows 1 new account per minute per IP, and every visitor
+   shares the proxy's few Cloudflare IPs, so creation often waits up to a
+   minute. Spares are created in the background so «Новый аккаунт» is
+   instant; the wait happens while nobody is looking. */
+const POOL_KEY = SESSION_KEY + '_pool';
+const POOL_MAX_AGE = 7 * 24 * 3600 * 1000;
+const FOREGROUND_TIMEOUT = 120000;
+let domainCache = null;
+let refilling = false;
+const waiters = [];
+
+const sleep = ms => new Promise(ok => setTimeout(ok, ms));
+let wakeRefill = null;
+function refillSleep(ms) {
+  return new Promise(ok => {
+    const done = () => { clearTimeout(t); wakeRefill = null; ok(); };
+    const t = setTimeout(done, ms);
+    wakeRefill = done;
+  });
+}
+
+function loadPool() {
   try {
-    token='';
-    const dd = await mtFetch('/domains?page=1');
-    const members = dd['hydra:member']||[];
-    if(!members.length) throw new Error('Нет доступных доменов');
-    const domain = members[0].domain;
-    const pass=genPass(), addr=`${rand(10)}@${domain}`;
-    setSt('Создаём аккаунт…');
-    await mtFetch('/accounts',{method:'POST',body:JSON.stringify({address:addr,password:pass})}, 4);
-    setSt('Получаем токен…');
-    const td=await mtFetch('/token',{method:'POST',body:JSON.stringify({address:addr,password:pass})});
-    if (myGen !== gen) return;
-    setAccount(addr,pass,td.token);
+    const p = JSON.parse(localStorage.getItem(POOL_KEY));
+    return Array.isArray(p) ? p.filter(a => a && a.address && a.password && Date.now() - a.createdAt < POOL_MAX_AGE) : [];
+  } catch(_) { return []; }
+}
+function savePool(p) { try { localStorage.setItem(POOL_KEY, JSON.stringify(p)); } catch(_) {} }
+function takeFromPool() { const p = loadPool(); const a = p.shift() || null; savePool(p); return a; }
+
+async function apiCall(path, body) {
+  const r = await fetch(API + path, {
+    method: body ? 'POST' : 'GET',
+    headers: { 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  let data = null;
+  try { data = await r.json(); } catch(_) {}
+  return { status: r.status, data };
+}
+
+async function getDomain() {
+  if (domainCache) return domainCache;
+  const r = await apiCall('/domains?page=1');
+  const d = r.data && r.data['hydra:member'] && r.data['hydra:member'].find(x => x.isActive !== false);
+  if (!d) throw new Error('domains ' + r.status);
+  domainCache = d.domain;
+  return domainCache;
+}
+
+async function createAccount() {
+  for (let fails = 0;; fails++) {
+    try {
+      const domain = await getDomain();
+      const password = genPass(), address = `${rand(10)}@${domain}`;
+      const r = await apiCall('/accounts', { address, password });
+      if (r.status === 201) {
+        let tok = null;
+        for (let i = 0; i < 3 && !tok; i++) {
+          const t = await apiCall('/token', { address, password });
+          if (t.status === 200 && t.data && t.data.token) tok = t.data.token; else await sleep(1500);
+        }
+        return { address, password, token: tok, createdAt: Date.now() };
+      }
+      if (r.status === 422) domainCache = null;
+    } catch(_) {}
+    const urgent = waiters.length > 0;
+    await refillSleep(urgent ? 3000 : (fails < 10 ? 12000 : 60000));
+  }
+}
+
+async function refill() {
+  if (refilling) return;
+  refilling = true;
+  try {
+    while (waiters.length || loadPool().length < POOL_SIZE) {
+      const acc = await createAccount();
+      const w = waiters.shift();
+      if (w) w(acc);
+      else { const p = loadPool(); p.push(acc); savePool(p); }
+    }
+  } finally { refilling = false; }
+}
+
+function nextAccount() {
+  const spare = takeFromPool();
+  if (spare) return Promise.resolve(spare);
+  return new Promise((ok, fail) => {
+    const resolve = acc => { clearTimeout(timer); ok(acc); };
+    const timer = setTimeout(() => {
+      const i = waiters.indexOf(resolve);
+      if (i >= 0) waiters.splice(i, 1);
+      fail(new Error('mail.tm не выдаёт новый ящик больше 2 минут (лимит). Подождите и нажмите ещё раз.'));
+    }, FOREGROUND_TIMEOUT);
+    waiters.push(resolve);
+    if (wakeRefill) wakeRefill();
+    refill();
+  });
+}
+
+/* ── create new account ────────────────────── */
+let switching = false;
+async function createNew() {
+  if (switching) return;
+  switching = true;
+  clearErr();
+  const btn = document.getElementById('new-btn');
+  btn.disabled = true;
+  const hadAccount = !!email;
+  if (!hadAccount) {
+    const el=document.getElementById('el'); el.textContent='Создаём…'; el.className='val dim'; el.onclick=null;
+    const pl=document.getElementById('pl'); pl.textContent='—'; pl.className='val dim'; pl.onclick=null;
+  }
+  const t0 = Date.now();
+  const ticker = setInterval(() => {
+    setSt('Ждём очередь mail.tm на новый ящик… ' + Math.round((Date.now()-t0)/1000) + 'с' + (hadAccount ? ' (текущий ящик работает)' : ''));
+  }, 1000);
+  try {
+    const acc = await nextAccount();
+    clearInterval(ticker);
+    stopAll(); resetInbox();
+    token = acc.token || '';
+    if (!token) {
+      setSt('Получаем токен…');
+      const td = await mtFetch('/token',{method:'POST',body:JSON.stringify({address:acc.address,password:acc.password})});
+      token = td.token;
+    }
+    setAccount(acc.address, acc.password, token);
     goLive('Ожидаем письма…');
   } catch(e) {
-    if (myGen !== gen) return;
-    if (autoRetry < 3) {
-      const wait = 2000*(autoRetry+1);
-      setSt('Ошибка, повтор через '+Math.ceil(wait/1000)+'с…','err');
-      setTimeout(()=>{ if (myGen === gen) createNew(autoRetry+1); }, wait);
-      return;
-    }
-    showErr('Не удалось создать аккаунт: '+e.message+'. Нажмите «Новый аккаунт» для повтора.');
-    setSt('Ошибка','err');
-    document.getElementById('new-btn').disabled=false;
-    document.getElementById('el').textContent='—';
+    clearInterval(ticker);
+    showErr(e.message);
+    if (hadAccount) okStatus(); else { setSt('Ошибка','err'); document.getElementById('el').textContent='—'; }
+  } finally {
+    switching = false;
+    btn.disabled = false;
+    refill();
   }
 }
 
@@ -771,7 +875,8 @@ document.addEventListener('visibilitychange', () => {
 /* ── init ──────────────────────────────────── */
 (async()=>{
   const restored = await restoreSession();
-  if(!restored) createNew();
+  if(!restored) await createNew();
+  refill();
 })();
 </script>
 </body>
