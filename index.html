@@ -337,6 +337,8 @@ const MERCURE = 'https://mercure.mail.tm/.well-known/mercure';
 const SESSION_KEY = 'tm_sess_private';
 const POOL_SIZE = 20;
 const POOL_TRACKER = true;
+const REFILL_MS = 4000;
+const REFILL_SLOW_MS = 4000;
 let token = '', email = '', password = '';
 let pollTimer = null, known = new Set();
 let pollErrors = 0;
@@ -522,10 +524,23 @@ const waiters = [];
 
 const sleep = ms => new Promise(ok => setTimeout(ok, ms));
 let wakeRefill = null;
+// Chrome throttles timers in background tabs to about once a minute;
+// timers inside a dedicated Worker keep their pace, so the pool keeps
+// filling while you work in other tabs.
+const bgTimer = (() => {
+  try {
+    const w = new Worker(URL.createObjectURL(new Blob(['onmessage=e=>setTimeout(()=>postMessage(e.data.id),e.data.ms)'], { type: 'text/javascript' })));
+    const cbs = new Map(); let seq = 0;
+    w.onmessage = e => { const cb = cbs.get(e.data); if (cb) { cbs.delete(e.data); cb(); } };
+    return { set(fn, ms) { const id = ++seq; cbs.set(id, fn); w.postMessage({ id, ms }); return id; }, clear(id) { cbs.delete(id); } };
+  } catch(_) {
+    return { set: (fn, ms) => setTimeout(fn, ms), clear: id => clearTimeout(id) };
+  }
+})();
 function refillSleep(ms) {
   return new Promise(ok => {
-    const done = () => { clearTimeout(t); wakeRefill = null; ok(); };
-    const t = setTimeout(done, ms);
+    const done = () => { bgTimer.clear(t); wakeRefill = null; ok(); };
+    const t = bgTimer.set(done, ms);
     wakeRefill = done;
   });
 }
@@ -611,7 +626,7 @@ async function createAccount() {
       if (r.status === 422) domainCache = null;
     } catch(_) {}
     const urgent = waiters.length > 0;
-    await refillSleep(urgent ? 3000 : (fails < 10 ? 12000 : 60000));
+    await refillSleep(urgent ? 2500 : (fails < 10 ? REFILL_MS : REFILL_SLOW_MS));
   }
 }
 
