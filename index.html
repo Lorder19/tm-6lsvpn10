@@ -267,10 +267,10 @@ header h1 { font-size: 16px; font-weight: 600; color: #f1f5f9; }
         <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
         <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
       </svg>
-      Скопировать логин + пароль (в таблицу)
+      Скопировать почту и пароль
     </button>
 
-    <div class="hint">Кнопка выше копирует оба поля через Tab — при вставке в таблицу расходятся по ячейкам.</div>
+    <div class="hint">Кнопка выше копирует почту и пароль через пробел — вставляются в одно поле одной строкой.</div>
 
     <button class="new-btn" id="new-btn" onclick="createNew()" disabled>
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
@@ -430,7 +430,7 @@ function clickCopy(el, getter) {
 
 async function copyAll(btn) {
   if (!email) return;
-  await copyText(email + '\t' + password);
+  await copyText(email + ' ' + password);
   btn.classList.add('flash-btn');
   setTimeout(() => btn.classList.remove('flash-btn'), 500);
 }
